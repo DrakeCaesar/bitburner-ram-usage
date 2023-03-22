@@ -11,8 +11,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     function updateLineCount() {
         if (activeEditor && activeEditor.document.lineCount > 0) {
+            console.log("function is running");
             const firstLine = activeEditor.document.lineAt(0);
-            if (firstLine.text.startsWith('import { NS } from "@ns"')) {
+            if (firstLine.text.startsWith("import { NS }")) {
                 if (lineCountDecoration) {
                     activeEditor.setDecorations(lineCountDecoration, []); // Clear previous decoration
                 }
@@ -53,17 +54,17 @@ export function activate(context: vscode.ExtensionContext) {
         null,
         context.subscriptions
     );
-	
-	vscode.workspace.onDidOpenTextDocument(
-		(document) => {
-			activeEditor = vscode.window.activeTextEditor;
-			if (activeEditor && activeEditor.document === document) {
-				updateLineCount();
-			}
-		},
-		null,
-		context.subscriptions
-	);
+
+    vscode.workspace.onDidOpenTextDocument(
+        (document) => {
+            activeEditor = vscode.window.activeTextEditor;
+            if (activeEditor && activeEditor.document === document) {
+                updateLineCount();
+            }
+        },
+        null,
+        context.subscriptions
+    );
 
     vscode.workspace.onDidChangeTextDocument(
         (event) => {
