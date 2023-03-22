@@ -1,26 +1,79 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+    console.log(
+        'Congratulations, your extension "line-counter" is now active!'
+    );
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "bitburner-ram-usage" is now active!');
+    let activeEditor = vscode.window.activeTextEditor;
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('bitburner-ram-usage.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from Bitburner RAM Usage!');
-	});
+    let lineCountDecoration: vscode.TextEditorDecorationType | undefined;
 
-	context.subscriptions.push(disposable);
+    function updateLineCount() {
+        if (activeEditor && activeEditor.document.lineCount > 0) {
+            const firstLine = activeEditor.document.lineAt(0);
+            if (firstLine.text.startsWith('import { NS } from "@ns"')) {
+                if (lineCountDecoration) {
+                    activeEditor.setDecorations(lineCountDecoration, []); // Clear previous decoration
+                }
+
+                const lineCount = activeEditor.document.lineCount;
+                const position = new vscode.Position(
+                    0,
+                    firstLine.range.end.character
+                );
+                lineCountDecoration =
+                    vscode.window.createTextEditorDecorationType({
+                        after: {
+                            contentText: ` (${lineCount} lines)`,
+                            fontStyle: "italic",
+                            color: "gray",
+                        },
+                    });
+                activeEditor.setDecorations(lineCountDecoration, [
+                    new vscode.Range(position, position),
+                ]);
+            } else if (lineCountDecoration) {
+                activeEditor.setDecorations(lineCountDecoration, []); // Clear decoration if the file does not match the required pattern
+            }
+        }
+    }
+
+    if (activeEditor) {
+        updateLineCount();
+    }
+
+    vscode.window.onDidChangeActiveTextEditor(
+        (editor) => {
+            activeEditor = editor;
+            if (editor) {
+                updateLineCount();
+            }
+        },
+        null,
+        context.subscriptions
+    );
+	
+	vscode.workspace.onDidOpenTextDocument(
+		(document) => {
+			activeEditor = vscode.window.activeTextEditor;
+			if (activeEditor && activeEditor.document === document) {
+				updateLineCount();
+			}
+		},
+		null,
+		context.subscriptions
+	);
+
+    vscode.workspace.onDidChangeTextDocument(
+        (event) => {
+            if (activeEditor && event.document === activeEditor.document) {
+                updateLineCount();
+            }
+        },
+        null,
+        context.subscriptions
+    );
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}
