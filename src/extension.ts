@@ -26,22 +26,17 @@ export function activate(context: vscode.ExtensionContext) {
                 const ramUsageMap = new Map<string, number>(
                     JSON.parse(fileContent)
                 );
-                //console.log(fileContent);
 
-                console.log(
-                    JSON.stringify(Array.from(ramUsageMap.entries()), null, 2)
-                );
                 const rootFolder =
                     vscode.workspace.workspaceFolders[0].uri.path + "/";
 
-                const filePath = activeEditor.document.uri.path
-                    .replace(rootFolder, "");
+                const filePath = activeEditor.document.uri.path.replace(
+                    rootFolder,
+                    ""
+                );
                 const jsFilePath = filePath;
-                console.log(jsFilePath);
-                console.log(rootFolder);
 
                 const ramCost = ramUsageMap.get(jsFilePath);
-                console.log(ramCost);
 
                 if (ramCost) {
                     const firstLine = activeEditor.document.lineAt(0);
@@ -81,7 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidOpenTextDocument(
         (document) => {
             activeEditor = vscode.window.activeTextEditor;
-            if (activeEditor && activeEditor.document === document) {
+            if (activeEditor) {
                 updateRamUsage();
             }
         },
@@ -102,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.workspace.onDidChangeTextDocument(
         (event) => {
-            if (activeEditor && activeEditor.document === event.document) {
+            if (activeEditor) {
                 updateRamUsage();
             }
         },
