@@ -8,91 +8,68 @@ export function activate(context: vscode.ExtensionContext) {
     let activeEditor = vscode.window.activeTextEditor;
     let ramCostDecoration: vscode.TextEditorDecorationType | undefined;
 
-    interface FunctionRamCost {
-        type: string;
-        name: string;
-        cost: number;
-    }
-
-    let ramCosts: FunctionRamCost[] = [];
-    const baseCost = 1.6;
-
-    async function parseRamCosts() {
+    async function updateRamUsage() {
         if (
-            ramCosts.length === 0 &&
+            vscode.workspace.workspaceFolders &&
             activeEditor &&
-            vscode.workspace.workspaceFolders
+            activeEditor.document.lineCount > 0
         ) {
-            const rootFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
-            const definitionsPath = path.join(
-                rootFolder,
-                "NetscriptDefinitions.d.ts"
-            );
+            const rootFsFolder =
+                vscode.workspace.workspaceFolders[0].uri.fsPath;
+            const ramUsagePath = path.join(rootFsFolder, "ramUsage.json");
 
-            if (fs.existsSync(definitionsPath)) {
+            if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
-                    definitionsPath,
+                    ramUsagePath,
                     "utf-8"
                 );
-                const functionRegex =
-                    /(?:RAM cost:|@remarks)[\s*]+(?:RAM cost:)? ?(\d+(?:\.\d+)?) ?GB[\s\S]+? (?:(\w+)\(.*\):|readonly (\w+))/g;
-
-                let match;
-                while ((match = functionRegex.exec(fileContent)) !== null) {
-                    ramCosts.push({
-                        type: match[2] ? "function" : "interface",
-                        name: match[2] ?? match[3],
-                        cost: parseFloat(match[1]),
-                    });
-                }
-            }
-            console.log(JSON.stringify(ramCosts, null, 2));
-        }
-    }
-
-    async function updateRamUsage() {
-        if (activeEditor && activeEditor.document.lineCount > 0) {
-            const firstLine = activeEditor.document.lineAt(0);
-            if (firstLine.text.startsWith('import { NS } from "@ns"')) {
-                await parseRamCosts();
-
-                let totalRamCost = baseCost;
-                const documentText = activeEditor.document.getText();
-
-                for (const ramCost of ramCosts) {
-                    const regex = new RegExp(`\\b${ramCost.name}\\(`, "g");
-                    const matches = documentText.match(regex);
-                    if (matches) {
-                        totalRamCost += ramCost.cost;
-                        console.log(
-                            `${matches[0]} : ${ramCost.name} : ${ramCost.cost}`
-                        );
-                    }
-                }
-
-                if (ramCostDecoration) {
-                    activeEditor.setDecorations(ramCostDecoration, []); // Clear previous decoration
-                }
-
-                const position = new vscode.Position(
-                    0,
-                    firstLine.range.end.character
+                const ramUsageMap = new Map<string, number>(
+                    JSON.parse(fileContent)
                 );
-                ramCostDecoration =
-                    vscode.window.createTextEditorDecorationType({
-                        after: {
-                            contentText: ` (Total RAM usage: ${totalRamCost.toFixed(
-                                2
-                            )} GB)`,
-                            fontStyle: "italic",
-                            color: "gray",
-                        },
-                    });
-                activeEditor.setDecorations(ramCostDecoration, [
-                    new vscode.Range(position, position),
-                ]);
-            } else if (ramCostDecoration) {
-                activeEditor.setDecorations(ramCostDecoration, []); // Clear decoration if the file does not match the required pattern
+                //console.log(fileContent);
+
+                console.log(
+                    JSON.stringify(Array.from(ramUsageMap.entries()), null, 2)
+                );
+                const rootFolder =
+                    vscode.workspace.workspaceFolders[0].uri.path + "/";
+
+                const filePath = activeEditor.document.uri.path
+                    .replace(rootFolder, "");
+                const jsFilePath = filePath;
+                console.log(jsFilePath);
+                console.log(rootFolder);
+
+                const ramCost = ramUsageMap.get(jsFilePath);
+                console.log(ramCost);
+
+                if (ramCost) {
+                    const firstLine = activeEditor.document.lineAt(0);
+
+                    if (ramCostDecoration) {
+                        activeEditor.setDecorations(ramCostDecoration, []); // Clear previous decoration
+                    }
+
+                    const position = new vscode.Position(
+                        0,
+                        firstLine.range.end.character
+                    );
+                    ramCostDecoration =
+                        vscode.window.createTextEditorDecorationType({
+                            after: {
+                                contentText: ` (Total RAM usage: ${ramCost.toFixed(
+                                    2
+                                )} GB)`,
+                                fontStyle: "italic",
+                                color: "gray",
+                            },
+                        });
+                    activeEditor.setDecorations(ramCostDecoration, [
+                        new vscode.Range(position, position),
+                    ]);
+                } else if (ramCostDecoration) {
+                    activeEditor.setDecorations(ramCostDecoration, []); // Clear decoration if the file does not have a RAM cost
+                }
             }
         }
     }
@@ -116,6 +93,16 @@ export function activate(context: vscode.ExtensionContext) {
         (editor) => {
             activeEditor = editor;
             if (editor) {
+                updateRamUsage();
+            }
+        },
+        null,
+        context.subscriptions
+    );
+
+    vscode.workspace.onDidChangeTextDocument(
+        (event) => {
+            if (activeEditor && activeEditor.document === event.document) {
                 updateRamUsage();
             }
         },
