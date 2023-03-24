@@ -2,9 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as ts from "typescript";
-import * as glob from "glob";
-import { Script } from "../bitburner-src/src/Script/Script";
-import { calculateRamUsage } from "../bitburner-src/src/Script/RamCalculations";
+import { calculateRamUsage } from "./Script/RamCalculations";
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "ram-counter" is now active!');
@@ -60,7 +58,8 @@ export function activate(context: vscode.ExtensionContext) {
                 );
 
                 const ramCostCalc = calculateRamUsage(sourceFile.text, []);
-                console.log(ramCostCalc);
+                console.log(`Calculated: ${ramCostCalc}`);
+                console.log(`Sum:        ${ramCost}`);
 
                 if (ramCost) {
                     const firstLine = activeEditor.document.lineAt(0);
@@ -97,17 +96,6 @@ export function activate(context: vscode.ExtensionContext) {
         updateRamUsage();
     }
 
-    vscode.workspace.onDidOpenTextDocument(
-        (document) => {
-            activeEditor = vscode.window.activeTextEditor;
-            if (activeEditor) {
-                updateRamUsage();
-            }
-        },
-        null,
-        context.subscriptions
-    );
-
     vscode.window.onDidChangeActiveTextEditor(
         (editor) => {
             activeEditor = editor;
@@ -118,19 +106,9 @@ export function activate(context: vscode.ExtensionContext) {
         null,
         context.subscriptions
     );
-
-    vscode.workspace.onDidChangeTextDocument(
-        (event) => {
-            if (activeEditor) {
-                updateRamUsage();
-            }
-        },
-        null,
-        context.subscriptions
-    );
 }
 
-export function deactivate() {}
+//export function deactivate() {}
 
 class RamUsageItem extends vscode.TreeItem {
     constructor(label: string, ramCost: number) {

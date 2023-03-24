@@ -42,5 +42,10 @@
         "eslint": "^8.34.0",
         "mocha": "^10.2.0",
         "typescript": "^5.0.2"
+    },
+    "dependencies": {
+        "@vscode/test-electron": "^2.3.0",
+        "acorn": "^8.8.2",
+        "acorn-walk": "^8.2.0"
     }
 }
