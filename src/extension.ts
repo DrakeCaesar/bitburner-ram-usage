@@ -34,10 +34,8 @@ export function activate(context: vscode.ExtensionContext) {
                 const rootFolder =
                     vscode.workspace.workspaceFolders[0].uri.path + "/";
 
-                const filePath = activeEditor.document.uri.path.replace(
-                    rootFolder,
-                    ""
-                );
+                const filePath = activeEditor.document.uri.path
+                    .replace(rootFolder, "");
                 const jsFilePath = filePath;
                 console.log(jsFilePath);
                 console.log(rootFolder);
@@ -112,3 +110,5 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions
     );
 }
+
+//export function deactivate() {}
