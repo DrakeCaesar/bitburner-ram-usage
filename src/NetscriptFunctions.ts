@@ -1,7 +1,7 @@
-import { NS } from "@nsdefs";
+import { NS } from "@nsdefs"
 
-import { INetscriptExtra } from "./NetscriptFunctions/Extra";
+import { INetscriptExtra } from "./NetscriptFunctions/Extra"
 
 export type NSFull = Readonly<
-    Omit<NS & INetscriptExtra, "pid" | "args" | "enums">
->;
+   Omit<NS & INetscriptExtra, "pid" | "args" | "enums">
+>

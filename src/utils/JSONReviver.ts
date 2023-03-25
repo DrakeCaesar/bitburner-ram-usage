@@ -1,10 +1,10 @@
 /* Generic Reviver, toJSON, and fromJSON functions used for saving and loading objects */
 
-import { validateObject } from "./Validator";
+import { validateObject } from "./Validator"
 
 export interface IReviverValue {
-  ctor: string;
-  data: any;
+   ctor: string
+   data: any
 }
 
 // A generic "smart reviver" function.
@@ -13,34 +13,38 @@ export interface IReviverValue {
 // constructor that has a `fromJSON` property on it, it hands
 // off to that `fromJSON` function, passing in the value.
 export function Reviver(key: string, value: IReviverValue | null): any {
-  if (value == null) {
-    return null;
-  }
+   if (value == null) {
+      return null
+   }
 
-  if (typeof value === "object" && typeof value.ctor === "string" && typeof value.data !== "undefined") {
-    // Compatibility for version v0.43.1
-    // TODO Remove this eventually
-    if (value.ctor === "AllServersMap") {
-      console.warn("Converting AllServersMap for v0.43.1");
-      return value.data;
-    }
-
-    const ctor = Reviver.constructors[value.ctor];
-
-    if (typeof ctor === "function" && typeof ctor.fromJSON === "function") {
-      const obj = ctor.fromJSON(value);
-      if (ctor.validationData !== undefined) {
-        validateObject(obj, ctor.validationData);
+   if (
+      typeof value === "object" &&
+      typeof value.ctor === "string" &&
+      typeof value.data !== "undefined"
+   ) {
+      // Compatibility for version v0.43.1
+      // TODO Remove this eventually
+      if (value.ctor === "AllServersMap") {
+         console.warn("Converting AllServersMap for v0.43.1")
+         return value.data
       }
-      return obj;
-    }
-  }
-  return value;
+
+      const ctor = Reviver.constructors[value.ctor]
+
+      if (typeof ctor === "function" && typeof ctor.fromJSON === "function") {
+         const obj = ctor.fromJSON(value)
+         if (ctor.validationData !== undefined) {
+            validateObject(obj, ctor.validationData)
+         }
+         return obj
+      }
+   }
+   return value
 }
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Reviver {
-  export const constructors: { [key: string]: any } = {};
+   export const constructors: { [key: string]: any } = {}
 }
 
 // A generic "toJSON" function that creates the data expected
@@ -55,17 +59,21 @@ export namespace Reviver {
 // Returns:    The structure (which will then be turned into a string
 //             as part of the JSON.stringify algorithm)
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-export function Generic_toJSON(ctorName: string, obj: Record<string, any>, keys?: string[]): IReviverValue {
-  if (!keys) {
-    keys = Object.keys(obj); // Only "own" properties are included
-  }
+export function Generic_toJSON(
+   ctorName: string,
+   obj: Record<string, any>,
+   keys?: string[]
+): IReviverValue {
+   if (!keys) {
+      keys = Object.keys(obj) // Only "own" properties are included
+   }
 
-  const data: Record<string, unknown> = {};
-  for (let index = 0; index < keys.length; ++index) {
-    const key = keys[index];
-    data[key] = obj[key];
-  }
-  return { ctor: ctorName, data: data };
+   const data: Record<string, unknown> = {}
+   for (let index = 0; index < keys.length; ++index) {
+      const key = keys[index]
+      data[key] = obj[key]
+   }
+   return { ctor: ctorName, data: data }
 }
 
 // A generic "fromJSON" function for use with Reviver: Just calls the
@@ -77,9 +85,9 @@ export function Generic_toJSON(ctorName: string, obj: Record<string, any>, keys?
 // Returns:    The object
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function Generic_fromJSON<T>(ctor: new () => T, data: any): T {
-  const obj: any = new ctor();
-  for (const name in data) {
-    obj[name] = data[name];
-  }
-  return obj;
+   const obj: any = new ctor()
+   for (const name in data) {
+      obj[name] = data[name]
+   }
+   return obj
 }

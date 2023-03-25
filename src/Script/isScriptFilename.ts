@@ -1,5 +1,5 @@
-export const validScriptExtensions: Array<string> = [`.js`, `.script`];
+export const validScriptExtensions: Array<string> = [`.js`, `.script`]
 
 export function isScriptFilename(f: string): boolean {
-  return validScriptExtensions.some((ext) => f.endsWith(ext));
+   return validScriptExtensions.some((ext) => f.endsWith(ext))
 }
