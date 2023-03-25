@@ -1,8 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { calculateRamUsage } from "./Script/RamCalculations";
-import { Script } from "./Script/Script";
 import { BaseServer } from "./Server/BaseServer";
 
 export function activate(context: vscode.ExtensionContext) {
@@ -22,15 +20,15 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.workspace.workspaceFolders[0].uri.fsPath;
             const ramUsagePath = path.join(rootFsFolder, "ramUsage.json");
 
-            async function readFilesRecursive(dir, parentPath = "") {
-                const files = await fs.promises.readdir(dir, {
+            function readFilesRecursive(dir: string, parentPath = "") {
+                const files = fs.readdirSync(dir, {
                     withFileTypes: true,
                 });
                 for (const file of files) {
                     const filePath = path.join(dir, file.name);
                     const relativePath = path.join(parentPath, file.name);
                     if (file.isDirectory()) {
-                        await readFilesRecursive(filePath, relativePath);
+                        readFilesRecursive(filePath, relativePath);
                     } else if (
                         file.name.endsWith(".js") ||
                         file.name.endsWith(".ts")
@@ -40,19 +38,29 @@ export function activate(context: vscode.ExtensionContext) {
                                   .replace("src", "dist\\src")
                                   .replace(".ts", ".js")
                             : filePath;
-                        const sourceFileContent = await fs.promises.readFile(
+                        const sourceFileContent = fs.readFileSync(
                             sourcePath,
                             "utf-8"
                         );
-                        server.writeToScriptFile(
-                            relativePath.replace(".ts", ".js"),
-                            sourceFileContent
-                        );
+                        if (relativePath.includes("\\")) {
+                            server.writeToScriptFile(
+                                "/" +
+                                    relativePath
+                                        .replace(".ts", ".js")
+                                        .replace("\\", "/"),
+                                sourceFileContent
+                            );
+                        } else {
+                            server.writeToScriptFile(
+                                relativePath.replace(".ts", ".js"),
+                                sourceFileContent
+                            );
+                        }
                     }
                 }
             }
 
-            await readFilesRecursive(path.join(rootFsFolder, "src"));
+            readFilesRecursive(path.join(rootFsFolder, "src"));
             if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
                     ramUsagePath,
@@ -86,10 +94,11 @@ export function activate(context: vscode.ExtensionContext) {
                 let calculatedRamCost;
                 for (const script of server.scripts) {
                     if (
-                        activeEditor.document.fileName
+                        activeEditor.document.uri.path
                             .replace(".ts", ".js")
                             .includes(script.filename)
                     ) {
+                        script.updateRamUsage(server.scripts);
                         calculatedRamCost = script.ramUsage;
                         break;
                     }
