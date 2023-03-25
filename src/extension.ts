@@ -29,47 +29,6 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.workspace.workspaceFolders[0].uri.fsPath;
             const ramUsagePath = path.join(rootFsFolder, "ramUsage.json");
 
-            function readFilesRecursive(dir: string, parentPath = "") {
-                const files = fs.readdirSync(dir, {
-                    withFileTypes: true,
-                });
-                for (const file of files) {
-                    const filePath = path.join(dir, file.name);
-                    const relativePath = path.join(parentPath, file.name);
-                    if (file.isDirectory()) {
-                        readFilesRecursive(filePath, relativePath);
-                    } else if (
-                        file.name.endsWith(".js") ||
-                        file.name.endsWith(".ts")
-                    ) {
-                        const sourcePath = filePath.endsWith(".ts")
-                            ? filePath
-                                  .replace("src", "out")
-                                  .replace(".ts", ".js")
-                            : filePath;
-                        const sourceFileContent = fs.readFileSync(
-                            sourcePath,
-                            "utf-8"
-                        );
-                        if (relativePath.includes("\\")) {
-                            server.writeToScriptFile(
-                                "/" +
-                                    relativePath
-                                        .replace(".ts", ".js")
-                                        .replace("\\", "/"),
-                                sourceFileContent
-                            );
-                        } else {
-                            server.writeToScriptFile(
-                                relativePath.replace(".ts", ".js"),
-                                sourceFileContent
-                            );
-                        }
-                    }
-                }
-            }
-
-            readFilesRecursive(path.join(rootFsFolder, "src"));
             if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
                     ramUsagePath,
@@ -187,7 +146,7 @@ export function activate(context: vscode.ExtensionContext) {
 //export function deactivate() {}
 
 function getRelativePath(absPath: string, rootDir: string): string {
-    const relPath = path.relative(rootDir, absPath);
+    const relPath = path.relative(rootDir, absPath).replace(/\\/g, "/");
     const relPathWithJs = relPath.replace(/\.ts$/, ".js");
     return relPathWithJs.includes("/") ? `/${relPathWithJs}` : relPathWithJs;
 }
@@ -226,7 +185,12 @@ function transpileFolder(
                 jsContent,
                 "utf8"
             );
-            const relPath = getRelativePath(filePath, srcFolder);
+            const rootFsFolder =
+                vscode.workspace.workspaceFolders[0].uri.fsPath;
+            const relPath = getRelativePath(
+                outFilePath,
+                path.join(rootFsFolder, "out")
+            );
             server.writeToScriptFile(relPath, jsContent);
         }
     }
@@ -238,6 +202,7 @@ function watchAndTranspile(
     options: ts.CompilerOptions
 ) {
     transpileFolder(srcFolder, outFolder, options);
+
     fs.watch(srcFolder, { recursive: true }, (eventType, filename) => {
         if (
             filename &&
@@ -252,6 +217,13 @@ function watchAndTranspile(
                 ? transpileFile(filePath, options)
                 : fs.readFileSync(filePath, "utf-8");
             fs.writeFileSync(outFilePath, jsContent, "utf8");
+            const rootFsFolder =
+                vscode.workspace.workspaceFolders[0].uri.fsPath;
+            const relPath = getRelativePath(
+                outFilePath,
+                path.join(rootFsFolder, "out")
+            );
+            server.writeToScriptFile(relPath, jsContent);
         }
     });
 }
