@@ -85,8 +85,13 @@ export const RamCostConstants = {
 //TODO: Figure out what to do with the player object
 
 class Player {
-    static bitNodeN: number;
-    static sourceFileLvl: (num: number) => number;
+    static bitNodeN = 5;
+    static sourceFileLvl(num: number): number {
+        if (num === 4) {
+            return 1;
+        }
+        return 0;
+    }
 }
 
 function SF4Cost(cost: number): () => number {

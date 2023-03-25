@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { calculateRamUsage } from "./Script/RamCalculations";
+import { Script } from "./Script/Script";
+import { BaseServer } from "./Server/BaseServer";
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "ram-counter" is now active!');
@@ -14,10 +17,42 @@ export function activate(context: vscode.ExtensionContext) {
             activeEditor &&
             activeEditor.document.lineCount > 0
         ) {
+            const server = new BaseServer({ hostname: "", ip: "" });
             const rootFsFolder =
                 vscode.workspace.workspaceFolders[0].uri.fsPath;
             const ramUsagePath = path.join(rootFsFolder, "ramUsage.json");
 
+            async function readFilesRecursive(dir, parentPath = "") {
+                const files = await fs.promises.readdir(dir, {
+                    withFileTypes: true,
+                });
+                for (const file of files) {
+                    const filePath = path.join(dir, file.name);
+                    const relativePath = path.join(parentPath, file.name);
+                    if (file.isDirectory()) {
+                        await readFilesRecursive(filePath, relativePath);
+                    } else if (
+                        file.name.endsWith(".js") ||
+                        file.name.endsWith(".ts")
+                    ) {
+                        const sourcePath = filePath.endsWith(".ts")
+                            ? filePath
+                                  .replace("src", "dist\\src")
+                                  .replace(".ts", ".js")
+                            : filePath;
+                        const sourceFileContent = await fs.promises.readFile(
+                            sourcePath,
+                            "utf-8"
+                        );
+                        server.writeToScriptFile(
+                            relativePath.replace(".ts", ".js"),
+                            sourceFileContent
+                        );
+                    }
+                }
+            }
+
+            await readFilesRecursive(path.join(rootFsFolder, "src"));
             if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
                     ramUsagePath,
@@ -28,20 +63,40 @@ export function activate(context: vscode.ExtensionContext) {
                 );
                 //console.log(fileContent);
 
-                console.log(
-                    JSON.stringify(Array.from(ramUsageMap.entries()), null, 2)
-                );
+                // console.log(
+                //     JSON.stringify(Array.from(ramUsageMap.entries()), null, 2)
+                // );
                 const rootFolder =
                     vscode.workspace.workspaceFolders[0].uri.path + "/";
 
-                const filePath = activeEditor.document.uri.path
-                    .replace(rootFolder, "");
+                const filePath = activeEditor.document.uri.path.replace(
+                    rootFolder,
+                    ""
+                );
                 const jsFilePath = filePath;
-                console.log(jsFilePath);
-                console.log(rootFolder);
+                // console.log(jsFilePath);
+                // console.log(rootFolder);
 
                 const ramCost = ramUsageMap.get(jsFilePath);
-                console.log(ramCost);
+
+                // const calculatedRamCost = calculateRamUsage(
+                //     sourceFileContent,
+                //     []
+                // );
+                let calculatedRamCost;
+                for (const script of server.scripts) {
+                    if (
+                        activeEditor.document.fileName
+                            .replace(".ts", ".js")
+                            .includes(script.filename)
+                    ) {
+                        calculatedRamCost = script.ramUsage;
+                        break;
+                    }
+                }
+
+                console.log("sum:  " + ramCost);
+                console.log("calc: " + calculatedRamCost);
 
                 if (ramCost) {
                     const firstLine = activeEditor.document.lineAt(0);
@@ -57,9 +112,9 @@ export function activate(context: vscode.ExtensionContext) {
                     ramCostDecoration =
                         vscode.window.createTextEditorDecorationType({
                             after: {
-                                contentText: ` (Total RAM usage: ${ramCost.toFixed(
-                                    2
-                                )} GB)`,
+                                contentText: ` (${ramCost.toFixed(2)} GB, ${(
+                                    calculatedRamCost ?? 0
+                                ).toFixed(2)} GB)`,
                                 fontStyle: "italic",
                                 color: "gray",
                             },
