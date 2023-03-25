@@ -42,18 +42,26 @@ export function activate(context: vscode.ExtensionContext) {
                         file.name.endsWith(".js") ||
                         file.name.endsWith(".ts")
                     ) {
-                        const sourceFileContent = filePath.endsWith(".ts")
-                            ? transpileFile(filePath, compilerOptions)
-                            : fs.readFileSync(filePath, "utf-8");
-
+                        const sourcePath = filePath.endsWith(".ts")
+                            ? filePath
+                                  .replace("src", "out")
+                                  .replace(".ts", ".js")
+                            : filePath;
+                        const sourceFileContent = fs.readFileSync(
+                            sourcePath,
+                            "utf-8"
+                        );
                         if (relativePath.includes("\\")) {
                             server.writeToScriptFile(
-                                "/" + relativePath.replace("\\", "/"),
+                                "/" +
+                                    relativePath
+                                        .replace(".ts", ".js")
+                                        .replace("\\", "/"),
                                 sourceFileContent
                             );
                         } else {
                             server.writeToScriptFile(
-                                relativePath,
+                                relativePath.replace(".ts", ".js"),
                                 sourceFileContent
                             );
                         }
@@ -61,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
 
-            //readFilesRecursive(path.join(rootFsFolder, "src"));
+            readFilesRecursive(path.join(rootFsFolder, "src"));
             if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
                     ramUsagePath,
