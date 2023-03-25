@@ -1,13 +1,23 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import * as ts from "typescript";
 import { BaseServer } from "./Server/BaseServer";
+import { Script } from "./Script/Script";
+
+const server = new BaseServer({ hostname: "", ip: "" });
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "ram-counter" is now active!');
 
     let activeEditor = vscode.window.activeTextEditor;
     let ramCostDecoration: vscode.TextEditorDecorationType | undefined;
+    const rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    watchAndTranspile(
+        path.join(rootFsFolder, "src"),
+        path.join(rootFsFolder, "out"),
+        compilerOptions
+    );
 
     async function updateRamUsage() {
         if (
@@ -15,7 +25,6 @@ export function activate(context: vscode.ExtensionContext) {
             activeEditor &&
             activeEditor.document.lineCount > 0
         ) {
-            const server = new BaseServer({ hostname: "", ip: "" });
             const rootFsFolder =
                 vscode.workspace.workspaceFolders[0].uri.fsPath;
             const ramUsagePath = path.join(rootFsFolder, "ramUsage.json");
@@ -33,26 +42,18 @@ export function activate(context: vscode.ExtensionContext) {
                         file.name.endsWith(".js") ||
                         file.name.endsWith(".ts")
                     ) {
-                        const sourcePath = filePath.endsWith(".ts")
-                            ? filePath
-                                  .replace("src", "dist\\src")
-                                  .replace(".ts", ".js")
-                            : filePath;
-                        const sourceFileContent = fs.readFileSync(
-                            sourcePath,
-                            "utf-8"
-                        );
+                        const sourceFileContent = filePath.endsWith(".ts")
+                            ? transpileFile(filePath, compilerOptions)
+                            : fs.readFileSync(filePath, "utf-8");
+
                         if (relativePath.includes("\\")) {
                             server.writeToScriptFile(
-                                "/" +
-                                    relativePath
-                                        .replace(".ts", ".js")
-                                        .replace("\\", "/"),
+                                "/" + relativePath.replace("\\", "/"),
                                 sourceFileContent
                             );
                         } else {
                             server.writeToScriptFile(
-                                relativePath.replace(".ts", ".js"),
+                                relativePath,
                                 sourceFileContent
                             );
                         }
@@ -60,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
 
-            readFilesRecursive(path.join(rootFsFolder, "src"));
+            //readFilesRecursive(path.join(rootFsFolder, "src"));
             if (fs.existsSync(ramUsagePath)) {
                 const fileContent = await fs.promises.readFile(
                     ramUsagePath,
@@ -176,3 +177,94 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 //export function deactivate() {}
+
+function getRelativePath(absPath: string, rootDir: string): string {
+    const relPath = path.relative(rootDir, absPath);
+    const relPathWithJs = relPath.replace(/\.ts$/, ".js");
+    return relPathWithJs.includes("/") ? `/${relPathWithJs}` : relPathWithJs;
+}
+
+function transpileFile(filePath: string, options: ts.CompilerOptions): string {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const result = ts.transpileModule(fileContent, {
+        compilerOptions: options,
+        fileName: filePath,
+    });
+    return result.outputText;
+}
+
+function transpileFolder(
+    srcFolder: string,
+    outFolder: string,
+    options: ts.CompilerOptions
+) {
+    if (!fs.existsSync(outFolder)) {
+        fs.mkdirSync(outFolder, { recursive: true });
+    }
+    const files = fs.readdirSync(srcFolder, {
+        withFileTypes: true,
+    });
+    for (const file of files) {
+        const filePath = path.join(srcFolder, file.name);
+        const outFilePath = path.join(outFolder, file.name);
+        if (file.isDirectory()) {
+            transpileFolder(filePath, outFilePath, options);
+        } else if (file.name.endsWith(".ts") || file.name.endsWith(".js")) {
+            const jsContent = file.name.endsWith(".ts")
+                ? transpileFile(filePath, options)
+                : fs.readFileSync(filePath, "utf-8");
+            fs.writeFileSync(
+                outFilePath.replace(/\.ts$|\.js$/, ".js"),
+                jsContent,
+                "utf8"
+            );
+            const relPath = getRelativePath(filePath, srcFolder);
+            server.writeToScriptFile(relPath, jsContent);
+        }
+    }
+}
+
+function watchAndTranspile(
+    srcFolder: string,
+    outFolder: string,
+    options: ts.CompilerOptions
+) {
+    transpileFolder(srcFolder, outFolder, options);
+    fs.watch(srcFolder, { recursive: true }, (eventType, filename) => {
+        if (
+            filename &&
+            (filename.endsWith(".ts") || filename.endsWith(".js"))
+        ) {
+            const filePath = path.join(srcFolder, filename);
+            const outFilePath = path.join(
+                outFolder,
+                filename.replace(/\.ts$|\.js$/, ".js")
+            );
+            const jsContent = filename.endsWith(".ts")
+                ? transpileFile(filePath, options)
+                : fs.readFileSync(filePath, "utf-8");
+            fs.writeFileSync(outFilePath, jsContent, "utf8");
+        }
+    });
+}
+const compilerOptions: ts.CompilerOptions = {
+    module: ts.ModuleKind.ESNext,
+    target: ts.ScriptTarget.ESNext,
+    lib: ["ESNext", "DOM"],
+    types: ["vite/client"],
+    strict: true,
+    allowJs: true,
+    isolatedModules: true,
+    esModuleInterop: true,
+    baseUrl: ".",
+    inlineSourceMap: true,
+    moduleResolution: ts.ModuleResolutionKind.NodeJs,
+    resolveJsonModule: true,
+    skipLibCheck: true,
+    outDir: "dist",
+    paths: {
+        "@/*": ["./src/*"],
+        "/src/*": ["./src/*"],
+        "@ns": ["./NetscriptDefinitions.d.ts"],
+    },
+};
