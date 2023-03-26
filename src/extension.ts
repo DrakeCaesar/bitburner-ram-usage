@@ -5,103 +5,20 @@ import * as ts from "typescript"
 import { BaseServer } from "./Server/BaseServer"
 
 const server = new BaseServer({ hostname: "", ip: "" })
+let rootFsFolder: string
 
 export function activate(context: vscode.ExtensionContext) {
    console.log('Congratulations, your extension "ram-counter" is now active!')
 
    let activeEditor = vscode.window.activeTextEditor
    let ramCostDecoration: vscode.TextEditorDecorationType | undefined
-   const rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath
+   if (vscode.workspace.workspaceFolders)
+      rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath
    watchAndTranspile(
       path.join(rootFsFolder, "src"),
       path.join(rootFsFolder, "out"),
       compilerOptions
    )
-
-   async function updateRamUsage() {
-      if (
-         vscode.workspace.workspaceFolders &&
-         activeEditor &&
-         activeEditor.document.lineCount > 0
-      ) {
-         const rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath
-         const ramUsagePath = path.join(rootFsFolder, "ramUsage.json")
-
-         if (fs.existsSync(ramUsagePath)) {
-            const fileContent = await fs.promises.readFile(
-               ramUsagePath,
-               "utf-8"
-            )
-            const ramUsageMap = new Map<string, number>(JSON.parse(fileContent))
-            //console.log(fileContent);
-
-            // console.log(
-            //     JSON.stringify(Array.from(ramUsageMap.entries()), null, 2)
-            // );
-            const rootFolder =
-               vscode.workspace.workspaceFolders[0].uri.path + "/"
-
-            const filePath = activeEditor.document.uri.path.replace(
-               rootFolder,
-               ""
-            )
-            const jsFilePath = filePath
-            // console.log(jsFilePath);
-            // console.log(rootFolder);
-
-            const ramCost = ramUsageMap.get(jsFilePath)
-
-            // const calculatedRamCost = calculateRamUsage(
-            //     sourceFileContent,
-            //     []
-            // );
-            let calculatedRamCost
-            for (const script of server.scripts) {
-               if (
-                  activeEditor.document.uri.path
-                     .replace(".ts", ".js")
-                     .includes(script.filename)
-               ) {
-                  script.updateRamUsage(server.scripts)
-                  calculatedRamCost = script.ramUsage
-                  break
-               }
-            }
-
-            console.log("sum:  " + ramCost)
-            console.log("calc: " + calculatedRamCost)
-
-            if (ramCost) {
-               const firstLine = activeEditor.document.lineAt(0)
-
-               if (ramCostDecoration) {
-                  activeEditor.setDecorations(ramCostDecoration, []) // Clear previous decoration
-               }
-
-               const position = new vscode.Position(
-                  0,
-                  firstLine.range.end.character
-               )
-               ramCostDecoration = vscode.window.createTextEditorDecorationType(
-                  {
-                     after: {
-                        contentText: ` (${ramCost.toFixed(2)} GB, ${(
-                           calculatedRamCost ?? 0
-                        ).toFixed(2)} GB)`,
-                        fontStyle: "italic",
-                        color: "gray",
-                     },
-                  }
-               )
-               activeEditor.setDecorations(ramCostDecoration, [
-                  new vscode.Range(position, position),
-               ])
-            } else if (ramCostDecoration) {
-               activeEditor.setDecorations(ramCostDecoration, []) // Clear decoration if the file does not have a RAM cost
-            }
-         }
-      }
-   }
 
    if (activeEditor) {
       updateRamUsage()
@@ -138,14 +55,67 @@ export function activate(context: vscode.ExtensionContext) {
       null,
       context.subscriptions
    )
-}
 
-//export function deactivate() {}
+   async function updateRamUsage() {
+      const editor = vscode.window.activeTextEditor
+      if (!editor) return
+      const document = vscode.window.activeTextEditor?.document
+      if (!document) return
+      const ramUsagePath = path.join(rootFsFolder, "ramUsage.json")
+      if (!fs.existsSync(ramUsagePath)) return
+
+      const fileContent = await fs.promises.readFile(ramUsagePath, "utf-8")
+      const ramUsageMap = new Map<string, number>(JSON.parse(fileContent))
+
+      const VBPath = getViteburnerPath(editor.document.uri.fsPath, rootFsFolder)
+      const ramCost = ramUsageMap.get(VBPath)
+      let calculatedRamCost
+      for (const script of server.scripts) {
+         if (
+            document.uri.path.replace(".ts", ".js").endsWith(script.filename)
+         ) {
+            script.updateRamUsage(server.scripts)
+            calculatedRamCost = script.ramUsage
+            break
+         }
+      }
+      for (const script of server.scripts) script.updateRamUsage(server.scripts)
+
+      console.log("sum:  " + ramCost)
+      console.log("calc: " + calculatedRamCost)
+      if (!ramCost && ramCostDecoration)
+         editor.setDecorations(ramCostDecoration, [])
+      if (!ramCost) return
+      const firstLine = document.lineAt(0)
+
+      if (ramCostDecoration) {
+         editor.setDecorations(ramCostDecoration, []) // Clear previous decoration
+      }
+
+      const position = new vscode.Position(0, firstLine.range.end.character)
+      ramCostDecoration = vscode.window.createTextEditorDecorationType({
+         after: {
+            contentText: ` (${ramCost.toFixed(2)} GB, ${(
+               calculatedRamCost ?? 0
+            ).toFixed(2)} GB)`,
+            fontStyle: "italic",
+            color: "green",
+         },
+      })
+      editor.setDecorations(ramCostDecoration, [
+         new vscode.Range(position, position),
+      ])
+   }
+}
 
 function getRelativePath(absPath: string, rootDir: string): string {
    const relPath = path.relative(rootDir, absPath).replace(/\\/g, "/")
    const relPathWithJs = relPath.replace(/\.ts$/, ".js")
    return relPathWithJs.includes("/") ? `/${relPathWithJs}` : relPathWithJs
+}
+
+function getViteburnerPath(absPath: string, rootDir: string): string {
+   return path.relative(rootDir, absPath).replace(/\\/g, "/")
 }
 
 function transpileFile(filePath: string, options: ts.CompilerOptions): string {
@@ -182,7 +152,6 @@ function transpileFolder(
             jsContent,
             "utf8"
          )
-         const rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath
          const relPath = getRelativePath(
             outFilePath,
             path.join(rootFsFolder, "out")
@@ -210,7 +179,6 @@ function watchAndTranspile(
             ? transpileFile(filePath, options)
             : fs.readFileSync(filePath, "utf-8")
          fs.writeFileSync(outFilePath, jsContent, "utf8")
-         const rootFsFolder = vscode.workspace.workspaceFolders[0].uri.fsPath
          const relPath = getRelativePath(
             outFilePath,
             path.join(rootFsFolder, "out")
@@ -230,13 +198,12 @@ const compilerOptions: ts.CompilerOptions = {
    esModuleInterop: true,
    baseUrl: ".",
    inlineSourceMap: true,
-   moduleResolution: ts.ModuleResolutionKind.NodeJs,
+   moduleResolution: ts.ModuleResolutionKind.NodeNext,
    resolveJsonModule: true,
    skipLibCheck: true,
    outDir: "dist",
    paths: {
-      "@/*": ["./src/*"],
-      "/src/*": ["./src/*"],
+      "*": ["./src/*"],
       "@ns": ["./NetscriptDefinitions.d.ts"],
    },
 }
