@@ -125,6 +125,11 @@ function transpileFile(filePath: string, options: ts.CompilerOptions): string {
       fileName: filePath,
    })
    return result.outputText
+      .replace(
+         /(from ['"])(\.\/|\/src\/|\/)(.*?)(\.js|)(['"];?$)/gm,
+         "$1/$3.js$5"
+      )
+      .replace("src", "out")
 }
 
 function transpileFolder(
