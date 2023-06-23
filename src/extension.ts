@@ -62,13 +62,14 @@ export function activate(context: vscode.ExtensionContext) {
       const document = vscode.window.activeTextEditor?.document
       if (!document) return
       const ramUsagePath = path.join(rootFsFolder, "ramUsage.json")
-      if (!fs.existsSync(ramUsagePath)) return
-
-      const fileContent = await fs.promises.readFile(ramUsagePath, "utf-8")
+      let fileContent = "[]"
+      if (fs.existsSync(ramUsagePath))
+         fileContent = await fs.promises.readFile(ramUsagePath, "utf-8")
       const ramUsageMap = new Map<string, number>(JSON.parse(fileContent))
 
       const VBPath = getViteburnerPath(editor.document.uri.fsPath, rootFsFolder)
-      const ramCost = ramUsageMap.get(VBPath)
+      const ramCost = ramUsageMap.get(VBPath) ?? -1
+
       let calculatedRamCost
       for (const script of server.scripts) {
          if (
@@ -83,7 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       console.log("sum:  " + ramCost)
       console.log("calc: " + calculatedRamCost)
-      if (!ramCost && ramCostDecoration)
+      if (ramCost && ramCostDecoration)
          editor.setDecorations(ramCostDecoration, [])
       if (!ramCost) return
       const firstLine = document.lineAt(0)
@@ -93,11 +94,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const position = new vscode.Position(0, firstLine.range.end.character)
+      const viteburnerCost = ramCost === -1 ? "" : ` ${ramCost.toFixed(2)} GB, `
       ramCostDecoration = vscode.window.createTextEditorDecorationType({
          after: {
-            contentText: ` (${ramCost.toFixed(2)} GB, ${(
-               calculatedRamCost ?? 0
-            ).toFixed(2)} GB)`,
+            contentText: ` (${viteburnerCost}${(calculatedRamCost ?? 0).toFixed(
+               2
+            )} GB)`,
             fontStyle: "italic",
             color: "green",
          },
